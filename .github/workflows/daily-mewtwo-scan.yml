@@ -1,0 +1,40 @@
+name: Daily Mewtwo eBay scan
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+      timezone: "America/Denver"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-and-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
+      EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
+      EBAY_ENV: production
+      EBAY_MARKETPLACE_ID: EBAY_US
+      EBAY_ZIP_CODE: ${{ secrets.EBAY_ZIP_CODE }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: "587"
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      SMTP_USE_SSL: "false"
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Scan up to 50 listings per pool and email underpriced results
+        run: python ebay_mewtwo_finder.py --limit 50 --send-email
