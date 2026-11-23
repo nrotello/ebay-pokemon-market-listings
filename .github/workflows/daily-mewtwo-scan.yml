@@ -12,7 +12,7 @@ permissions:
 jobs:
   scan-and-email:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
       EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}
@@ -36,5 +36,5 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-      - name: Scan up to 50 listings per pool and email underpriced results
-        run: python ebay_mewtwo_finder.py --limit 50 --send-email
+      - name: Scan up to 200 listings per pool and email underpriced results
+        run: python ebay_mewtwo_finder.py --limit 200 --send-email

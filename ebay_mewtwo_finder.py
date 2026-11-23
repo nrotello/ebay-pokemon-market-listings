@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Find Mewtwo Base Set eBay listings and compare to user-supplied benchmarks."""
+"""Find Pokémon eBay listings and compare them with user-supplied benchmarks."""
 from __future__ import annotations
 
 import argparse
@@ -238,7 +238,11 @@ def enrich_item_details(items: list[dict[str, Any]], token: str, marketplace: st
             fetched += 1
             for item in candidates_by_id[item_id]:
                 item["_condition_descriptors"] = details.get("conditionDescriptors") or []
-                for key in ("condition", "conditionId", "price", "shippingOptions"):
+                # Keep the compact search image as a fallback, but prefer the
+                # full item response's image set for email and workbook output.
+                if item.get("image"):
+                    item["_summary_image"] = item["image"]
+                for key in ("condition", "conditionId", "price", "shippingOptions", "image", "additionalImages"):
                     if details.get(key):
                         item[key] = details[key]
     return fetched, failed
@@ -310,8 +314,7 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
             item.get("_effective_condition") or item.get("condition", ""),
             item.get("itemWebUrl", ""),
             issue,
-            ((item.get("image") or {}).get("imageUrl")
-             or ((item.get("thumbnailImages") or [{}])[0].get("imageUrl", ""))),
+            listing_image_url(item),
         ]
         if issue:
             tabs["Needs Review"].append(row)
@@ -322,10 +325,25 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
     return tabs
 
 
+def listing_image_url(item: dict[str, Any]) -> str:
+    """Use the listing's primary gallery image, never a later photo by size."""
+    primary_candidates = [item.get("image"), item.get("_summary_image")]
+    for image in primary_candidates:
+        if isinstance(image, dict) and image.get("imageUrl"):
+            return str(image["imageUrl"])
+
+    # The API's primary image can be absent. Only then use the first available
+    # additional listing image, followed by the search thumbnail.
+    for image in (item.get("additionalImages") or []) + (item.get("thumbnailImages") or []):
+        if isinstance(image, dict) and image.get("imageUrl"):
+            return str(image["imageUrl"])
+    return ""
+
+
 HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "eBay URL", "Review Note", "Image URL"]
 
 
-def send_underpriced_email(rows: list[list[Any]], recipient: str) -> None:
+def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) -> None:
     """Email only Under Market rows, embedding each eBay listing photo when available."""
     required = ["SMTP_HOST", "SMTP_FROM"]
     missing = [name for name in required if not os.getenv(name)]
@@ -335,15 +353,15 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str) -> None:
         raise ValueError("Email is enabled but configuration is missing: " + ", ".join(missing))
 
     message = EmailMessage()
-    message["Subject"] = f"Mewtwo eBay underpriced listings ({len(rows)})"
+    message["Subject"] = f"Underpriced Pokémon eBay listings: {query} ({len(rows)})"
     message["From"] = os.environ["SMTP_FROM"]
     message["To"] = recipient
     message["Date"] = formatdate(localtime=True)
     if not rows:
-        message.set_content("No underpriced Mewtwo Base Set listings were found in today's scan.")
-        message.add_alternative("<p>No underpriced Mewtwo Base Set listings were found in today's scan.</p>", subtype="html")
+        message.set_content(f"No underpriced Pokémon listings were found for '{query}' in today's scan.")
+        message.add_alternative(f"<p>No underpriced Pokémon listings were found for '{html_escape(query)}' in today's scan.</p>", subtype="html")
     else:
-        html = ["<html><body><h2>Underpriced Mewtwo Base Set listings</h2>"]
+        html = [f"<html><body><h2>Underpriced Pokémon listings: {html_escape(query)}</h2>"]
         html.append("<p>These listings passed the project filters and are priced below their configured benchmark.</p>")
         embedded_images: list[tuple[bytes, str, str]] = []
         for index, row in enumerate(rows):
@@ -359,13 +377,13 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str) -> None:
                     response.raise_for_status()
                     subtype = response.headers.get("Content-Type", "image/jpeg").split("/")[-1].split(";")[0]
                     cid = f"listing-{index}@mewtwo-finder"
-                    html.append(f'<p><img src="cid:{cid}" alt="eBay listing photo" style="max-width:420px;height:auto"></p>')
+                    html.append(f'<p><img src="cid:{cid}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
                     embedded_images.append((response.content, subtype, cid))
                 except (requests.RequestException, ValueError, TypeError):
-                    html.append(f'<p><img src="{html_escape(image_url)}" alt="eBay listing photo" style="max-width:420px;height:auto"></p>')
+                    html.append(f'<p><img src="{html_escape(image_url)}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
             html.append(f'<p><a href="{html_escape(url)}">View listing on eBay</a></p>')
         html.append("</body></html>")
-        message.set_content(f"{len(rows)} underpriced Mewtwo Base Set listing(s) found. Open this email in an HTML-capable mail client to view photos and links.")
+        message.set_content(f"{len(rows)} underpriced Pokémon listing(s) found for '{query}'. Open this email in an HTML-capable mail client to view photos and links.")
         message.add_alternative("".join(html), subtype="html")
         html_part = message.get_body(preferencelist=("html",))
         if html_part is None:
@@ -402,7 +420,7 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
     wb = Workbook()
     summary = wb.active
     summary.title = "Summary"
-    summary.append(["Mewtwo Base Set Listing Scan"])
+    summary.append(["Pokémon eBay Listing Scan"])
     summary.append(["Search query", query])
     summary.append(["Text result sort", "Best Match (eBay default)"])
     summary.append(["Created (UTC)", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")])
@@ -447,18 +465,18 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
 def main() -> int:
     load_dotenv(ROOT / ".env")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--query", default="mewtwo 10/102", help="eBay text search phrase")
-    parser.add_argument("--limit", type=int, default=50, help="Maximum text results per card type (1-50)")
+    parser.add_argument("--query", default="pikachu grey felt hat", help="eBay text search phrase")
+    parser.add_argument("--limit", type=int, default=200, help="Maximum text results per card type (1-200)")
     parser.add_argument("--send-email", action="store_true", help="Email only Under Market listings using SMTP settings in .env")
     parser.add_argument("--email-to", default=os.getenv("EMAIL_TO", ""), help="Email recipient (or set EMAIL_TO in .env)")
     parser.add_argument("--benchmarks", type=Path, default=ROOT / "benchmarks.csv")
-    parser.add_argument("--output", type=Path, default=ROOT / "mewtwo_base_set_listings.xlsx")
+    parser.add_argument("--output", type=Path, default=ROOT / "pokemon_ebay_listings.xlsx")
     parser.add_argument("--marketplace", default=os.getenv("EBAY_MARKETPLACE_ID", "EBAY_US"))
     parser.add_argument("--environment", choices=["production", "sandbox"], default=os.getenv("EBAY_ENV", "production").lower())
     parser.add_argument("--zip", default=os.getenv("EBAY_ZIP_CODE", ""), help="US destination ZIP for calculated shipping")
     args = parser.parse_args()
-    if not 1 <= args.limit <= 50:
-        parser.error("--limit must be between 1 and 50")
+    if not 1 <= args.limit <= 200:
+        parser.error("--limit must be between 1 and 200")
     client_id, client_secret = os.getenv("EBAY_CLIENT_ID"), os.getenv("EBAY_CLIENT_SECRET")
     if not client_id or not client_secret:
         print("Missing EBAY_CLIENT_ID or EBAY_CLIENT_SECRET. Copy .env.example to .env and fill in your eBay app keys.", file=sys.stderr)
@@ -497,7 +515,7 @@ def main() -> int:
         tabs = make_rows(eligible_listings, benchmarks)
         write_workbook(tabs, args.output, args.query, filter_stats, search_stats)
         if args.send_email:
-            send_underpriced_email(tabs["Under Market"], args.email_to)
+            send_underpriced_email(tabs["Under Market"], args.email_to, args.query)
     except requests.HTTPError as exc:
         detail = exc.response.text[:1000] if exc.response is not None else str(exc)
         print(f"eBay API request failed: {detail}", file=sys.stderr)

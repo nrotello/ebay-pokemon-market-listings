@@ -9,7 +9,7 @@
     <string>/Users/nrk/Documents/Codex/2026-11-22/wher/outputs/mewtwo-ebay-mvp/.venv/bin/python</string>
     <string>/Users/nrk/Documents/Codex/2026-11-22/wher/outputs/mewtwo-ebay-mvp/ebay_mewtwo_finder.py</string>
     <string>--limit</string>
-    <string>50</string>
+    <string>200</string>
     <string>--send-email</string>
   </array>
   <key>WorkingDirectory</key>

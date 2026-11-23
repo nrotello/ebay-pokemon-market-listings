@@ -1,6 +1,6 @@
-# Mewtwo Base Set eBay Deal Finder (MVP)
+# Pokémon eBay Deal Finder (MVP)
 
-Search active eBay US listings for Mewtwo Base Set cards, compare each listing with a benchmark you provide, and export the results to an Excel workbook. The default run makes two separate **text-only** searches using eBay's **Best Match** order: a graded pool (condition ID 2750) and a raw pool (condition ID 4000). Each pool uses `mewtwo 10/102` for up to 50 results.
+Search active eBay US listings for Pokémon cards, compare each listing with a benchmark you provide, and export the results to an Excel workbook. The default query is `pikachu grey felt hat`. The run makes two separate **text-only** searches using eBay's **Best Match** order: a graded pool (condition ID 2750) and a raw pool (condition ID 4000). Each pool searches up to 200 results.
 
 - **Under Market**: listing total price is below its matching benchmark.
 - **Regular**: listing total price is at or above its matching benchmark.
@@ -15,6 +15,8 @@ Raw cards only match the `raw` benchmark row. PSA cards match the exact grade la
 ## Important about the benchmark
 
 The public eBay Browse API returns **active asking prices**, not sold prices. eBay's sold-history Marketplace Insights API is limited access. This MVP therefore reads market benchmarks from `benchmarks.csv`; populate it with your preferred trusted source and record that source and date in each row. It intentionally does not invent a market price or use active asks as a sold-price benchmark.
+
+**Before using Pikachu “Under Market” results:** `benchmarks.csv` still contains the previous Mewtwo benchmarks. Replace them with trusted benchmarks for the Pikachu Grey Felt Hat card (raw and each grade you want to compare). Otherwise, underpriced classifications and emails will use the wrong card's prices.
 
 All amounts should be in the same currency as the listing results (USD by default). Listing total price is item price plus shipping when eBay supplies a shipping cost. Sales tax is excluded because it depends on the buyer's location.
 For calculated shipping, set `EBAY_ZIP_CODE` in `.env` or pass `--zip`; the script sends the ZIP as eBay's contextual delivery location and fetches full item details when a search summary omits listing characteristics or shipping details. Shipping can still be missing for some listings.
@@ -36,14 +38,14 @@ For calculated shipping, set `EBAY_ZIP_CODE` in `.env` or pass `--zip`; the scri
 
 5. Fill in `benchmarks.csv` before running if you want listings sorted into the two price tabs. Blank/missing benchmark rows are sent to **Needs Review**.
 
-The workbook is saved as `mewtwo_base_set_listings.xlsx` in this project folder. Each card-type pool is capped at 50 text results. Change the text search phrase with `--query` or lower the per-pool cap with `--limit` (1-50).
+The workbook is saved as `pokemon_ebay_listings.xlsx` in this project folder. Each card-type pool is capped at 200 text results. Change the text search phrase with `--query` or lower the per-pool cap with `--limit` (1-200).
 
 ## Daily underpriced listing email
 
-The scan can send an HTML email containing only listings in the workbook's **Under Market** tab. Each entry includes its eBay link and an embedded listing photo when eBay provides an image URL. The daily scheduled run searches up to 50 graded and 50 raw listings, then sends the results after the workbook is saved. It sends a short no-results message when none qualify; **Regular** and **Needs Review** rows are never emailed.
+The scan can send an HTML email containing only listings in the workbook's **Under Market** tab. Each entry includes its eBay link and an embedded listing photo when eBay provides an image URL. The daily scheduled run searches up to 200 graded and 200 raw listings, then sends the results after the workbook is saved. It sends a short no-results message when none qualify; **Regular** and **Needs Review** rows are never emailed.
 
 1. Add SMTP settings and the destination address to `.env` using `.env.example` as a guide. `SMTP_HOST`, `SMTP_FROM`, and `EMAIL_TO` are required. Add username/password if your provider requires SMTP authentication. Keep `.env` private.
-2. Run a one-time manual send with `./.venv/bin/python ebay_mewtwo_finder.py --limit 50 --send-email`. This sends a real email; use a test recipient first if you are validating the setup.
+2. Run a one-time manual send with `./.venv/bin/python ebay_mewtwo_finder.py --limit 200 --send-email`. This sends a real email; use a test recipient first if you are validating the setup.
 3. To schedule it on this Mac, make sure macOS is set to the **America/Denver** time zone, then install and load the included LaunchAgent:
 
    ```sh
