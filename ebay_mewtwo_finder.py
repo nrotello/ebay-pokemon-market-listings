@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import formatdate
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -22,6 +23,7 @@ from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent
 API_ROOT = "https://api.ebay.com"
@@ -364,6 +366,8 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) ->
         html = [f"<html><body><h2>Underpriced Pokémon listings: {html_escape(query)}</h2>"]
         html.append("<p>These listings passed the project filters and are priced below their configured benchmark.</p>")
         embedded_images: list[tuple[bytes, str, str]] = []
+        inline_image_bytes = 0
+        inline_image_budget = 16 * 1024 * 1024
         for index, row in enumerate(rows):
             title, _, grade, total, currency, _, benchmark, *_ = row
             url = row[11]
@@ -375,11 +379,23 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) ->
                 try:
                     response = requests.get(image_url, timeout=20)
                     response.raise_for_status()
-                    subtype = response.headers.get("Content-Type", "image/jpeg").split("/")[-1].split(";")[0]
+                    with Image.open(BytesIO(response.content)) as image:
+                        image.thumbnail((700, 700))
+                        if image.mode not in {"RGB", "L"}:
+                            image = image.convert("RGB")
+                        output = BytesIO()
+                        image.save(output, format="JPEG", quality=68, optimize=True, progressive=True)
+                        content = output.getvalue()
                     cid = f"listing-{index}@mewtwo-finder"
-                    html.append(f'<p><img src="cid:{cid}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
-                    embedded_images.append((response.content, subtype, cid))
-                except (requests.RequestException, ValueError, TypeError):
+                    if inline_image_bytes + len(content) <= inline_image_budget:
+                        html.append(f'<p><img src="cid:{cid}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
+                        embedded_images.append((content, "jpeg", cid))
+                        inline_image_bytes += len(content)
+                    else:
+                        # Keep every listing pictured without exceeding Gmail's
+                        # attachment limit when many listings qualify.
+                        html.append(f'<p><img src="{html_escape(image_url)}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
+                except (requests.RequestException, OSError, ValueError, TypeError):
                     html.append(f'<p><img src="{html_escape(image_url)}" alt="eBay listing photo" style="max-width:700px;height:auto"></p>')
             html.append(f'<p><a href="{html_escape(url)}">View listing on eBay</a></p>')
         html.append("</body></html>")
