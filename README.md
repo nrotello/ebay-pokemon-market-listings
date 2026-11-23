@@ -16,7 +16,7 @@ Raw cards only match the `raw` benchmark row. PSA cards match the exact grade la
 
 The public eBay Browse API returns **active asking prices**, not sold prices. eBay's sold-history Marketplace Insights API is limited access. This MVP therefore reads market benchmarks from `benchmarks.csv`; populate it with your preferred trusted source and record that source and date in each row. It intentionally does not invent a market price or use active asks as a sold-price benchmark.
 
-**Before using Pikachu “Under Market” results:** `benchmarks.csv` still contains the previous Mewtwo benchmarks. Replace them with trusted benchmarks for the Pikachu Grey Felt Hat card (raw and each grade you want to compare). Otherwise, underpriced classifications and emails will use the wrong card's prices.
+`benchmarks.csv` contains the configured Pikachu Grey Felt Hat benchmark prices. Fill in the source and `as_of` columns to record where and when each benchmark was obtained.
 
 All amounts should be in the same currency as the listing results (USD by default). Listing total price is item price plus shipping when eBay supplies a shipping cost. Sales tax is excluded because it depends on the buyer's location.
 For calculated shipping, set `EBAY_ZIP_CODE` in `.env` or pass `--zip`; the script sends the ZIP as eBay's contextual delivery location and fetches full item details when a search summary omits listing characteristics or shipping details. Shipping can still be missing for some listings.
