@@ -12,6 +12,8 @@ Quality filter: raw listings are included only when eBay's structured card-condi
 
 Raw cards only match the `raw` benchmark row. PSA cards match the exact grade label (for example, `PSA 9`); PSA 9 does not match PSA 8 or raw. Grader and grade come only from eBay's structured listing characteristics.
 
+Each row in `benchmarks.csv` can optionally set `minimum_price` as a per-grade total-price floor (including shipping). Listings below that floor are sent to **Needs Review** with a possible-counterfeit/pricing-error note, and are not treated as deals or emailed. Leave the field blank to disable the floor for that row. These floors are screening hints rather than proof that a listing is counterfeit.
+
 ## Important about the benchmark
 
 The public eBay Browse API returns **active asking prices**, not sold prices. eBay's sold-history Marketplace Insights API is limited access. This MVP therefore reads market benchmarks from `benchmarks.csv`; populate it with your preferred trusted source and record that source and date in each row. It intentionally does not invent a market price or use active asks as a sold-price benchmark.
@@ -77,10 +79,10 @@ A stable Cloudflare Worker is deployed at `https://mewtwo-ebay-notifications.nnr
 ## Example benchmark CSV
 
 ```csv
-card_type,grade,benchmark_price,currency,source,as_of
-raw,,45.00,USD,Recent sold comps; median of 10,2026-11-22
-graded,PSA 8,95.00,USD,Recent sold comps; median of 8,2026-11-22
-graded,PSA 9,180.00,USD,Recent sold comps; median of 8,2026-11-22
+card_type,grade,benchmark_price,currency,source,as_of,minimum_price
+raw,,45.00,USD,Recent sold comps; median of 10,2026-11-22,
+graded,PSA 8,95.00,USD,Recent sold comps; median of 8,2026-11-22,
+graded,PSA 9,180.00,USD,Recent sold comps; median of 8,2026-11-22,
 ```
 
 The numbers above are examples of formatting only, not market estimates.

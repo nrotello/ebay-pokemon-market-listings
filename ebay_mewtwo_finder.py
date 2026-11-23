@@ -41,8 +41,8 @@ def get_access_token(client_id: str, client_secret: str, api_root: str) -> str:
     return response.json()["access_token"]
 
 
-def load_benchmarks(path: Path) -> dict[tuple[str, str], dict[str, str]]:
-    benchmarks: dict[tuple[str, str], dict[str, str]] = {}
+def load_benchmarks(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    benchmarks: dict[tuple[str, str], dict[str, Any]] = {}
     with path.open(newline="", encoding="utf-8-sig") as stream:
         for row in csv.DictReader(stream):
             card_type = (row.get("card_type") or "").strip().lower()
@@ -54,8 +54,16 @@ def load_benchmarks(path: Path) -> dict[tuple[str, str], dict[str, str]]:
                 price = float(raw_price.replace(",", ""))
             except ValueError as exc:
                 raise ValueError(f"Invalid benchmark price: {raw_price!r}") from exc
+            raw_minimum = (row.get("minimum_price") or "").strip()
+            try:
+                minimum_price = float(raw_minimum.replace(",", "")) if raw_minimum else None
+                if minimum_price is not None and minimum_price < 0:
+                    raise ValueError
+            except ValueError as exc:
+                raise ValueError(f"Invalid minimum price: {raw_minimum!r}") from exc
             benchmarks[(card_type, grade)] = {
                 "price": price,
+                "minimum_price": minimum_price,
                 "currency": (row.get("currency") or "USD").strip().upper(),
                 "source": (row.get("source") or "").strip(),
                 "as_of": (row.get("as_of") or "").strip(),
@@ -283,7 +291,7 @@ def filter_by_quality(items: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
     return included, stats
 
 
-def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dict[str, str]]) -> dict[str, list[list[Any]]]:
+def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dict[str, Any]]) -> dict[str, list[list[Any]]]:
     tabs: dict[str, list[list[Any]]] = {"Under Market": [], "Regular": [], "Needs Review": []}
     for item in items:
         title = item.get("title", "")
@@ -301,6 +309,9 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
             issue = f"Currency mismatch: listing {currency}, benchmark {benchmark['currency']}."
         if not issue and total is None:
             issue = "Could not calculate total because listing price or shipping cost is missing."
+        minimum_price = benchmark.get("minimum_price") if benchmark else None
+        if not issue and minimum_price is not None and total is not None and total < minimum_price:
+            issue = f"Below minimum price {currency} {minimum_price:.2f}; possible counterfeit or pricing error. Verify before considering."
 
         row = [
             title,
@@ -317,6 +328,7 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
             item.get("itemWebUrl", ""),
             issue,
             listing_image_url(item),
+            round(minimum_price, 2) if minimum_price is not None else "",
         ]
         if issue:
             tabs["Needs Review"].append(row)
@@ -342,7 +354,7 @@ def listing_image_url(item: dict[str, Any]) -> str:
     return ""
 
 
-HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "eBay URL", "Review Note", "Image URL"]
+HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
 
 
 def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) -> None:
@@ -465,7 +477,7 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="1F4E78")
             cell.alignment = Alignment(wrap_text=True)
-        widths = [55, 14, 12, 14, 12, 12, 14, 32, 16, 14, 22, 48, 48, 48]
+        widths = [55, 14, 12, 14, 12, 12, 14, 32, 16, 14, 22, 48, 48, 48, 16]
         for index, width in enumerate(widths, start=1):
             sheet.column_dimensions[get_column_letter(index)].width = width
         for row in sheet.iter_rows(min_row=2):

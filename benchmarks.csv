@@ -1,6 +1,6 @@
-card_type,grade,benchmark_price,currency,source,as_of,
-raw,,777.15,,,,785
-graded,PSA 7,752.4,,,,760
-graded,PSA 8,755.37,,,,763
-graded,PSA 9,777.15,,,,785
-graded,PSA 10,2277,,,,2300
+card_type,grade,benchmark_price,currency,source,as_of,minimum_price
+raw,,785,,,,350
+graded,PSA 7,760,,,,350
+graded,PSA 8,763,,,,350
+graded,PSA 9,785,,,,350
+graded,PSA 10,2300,,,,1000
