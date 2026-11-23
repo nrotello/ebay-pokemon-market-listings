@@ -1,4 +1,4 @@
-name: Daily Mewtwo eBay scan
+name: Daily Pokemon eBay scan
 
 on:
   schedule:
