@@ -102,8 +102,8 @@ def search_listings(token: str, query: str, limit: int, condition_id: str, marke
         response = requests.get(
             f"{api_root}/buy/browse/v1/item_summary/search",
             headers=headers,
-            # Omitting sort uses eBay Browse's default Best Match ordering.
             params={"q": query, "limit": page_size, "offset": offset,
+                    "sort": "newlyListed",
                     "filter": f"conditionIds:{{{condition_id}}}"},
             timeout=30,
         )
@@ -450,7 +450,7 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
     summary.title = "Summary"
     summary.append(["Pokémon eBay Listing Scan"])
     summary.append(["Search query", query])
-    summary.append(["Text result sort", "Best Match (eBay default)"])
+    summary.append(["Text result sort", "Newly listed first"])
     summary.append(["Created (UTC)", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")])
     summary.append(["Benchmark method", "User-supplied benchmarks.csv; see README for sold-data limitation"])
     summary.append([])

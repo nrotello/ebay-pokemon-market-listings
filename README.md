@@ -1,6 +1,6 @@
 # Pokémon eBay Deal Finder (MVP)
 
-Search active eBay US listings for Pokémon cards, compare each listing with a benchmark you provide, and export the results to an Excel workbook. The default query is `pikachu grey felt hat`. The run makes two separate **text-only** searches using eBay's **Best Match** order: a graded pool (condition ID 2750) and a raw pool (condition ID 4000). Each pool searches up to 200 results.
+Search active eBay US listings for Pokémon cards, compare each listing with a benchmark you provide, and export the results to an Excel workbook. The default query is `pikachu grey felt hat`. The run makes two separate **text-only** searches sorted by **newly listed first**: a graded pool (condition ID 2750) and a raw pool (condition ID 4000). Each pool searches up to 200 results.
 
 - **Under Market**: listing total price is below its matching benchmark.
 - **Regular**: listing total price is at or above its matching benchmark.
