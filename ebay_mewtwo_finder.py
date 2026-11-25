@@ -329,6 +329,7 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
             issue,
             listing_image_url(item),
             round(minimum_price, 2) if minimum_price is not None else "",
+            listing_date(item),
         ]
         if issue:
             tabs["Needs Review"].append(row)
@@ -352,6 +353,20 @@ def listing_image_url(item: dict[str, Any]) -> str:
         if isinstance(image, dict) and image.get("imageUrl"):
             return str(image["imageUrl"])
     return ""
+
+
+def listing_date(item: dict[str, Any]) -> str:
+    """Return eBay's first-available date for a listing, formatted in UTC."""
+    value = item.get("itemOriginDate") or item.get("itemCreationDate")
+    if not value:
+        return "Date unavailable"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return "Date unavailable"
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
@@ -387,6 +402,7 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) ->
             html.append("<hr>")
             html.append(f"<h3><a href=\"{html_escape(url)}\">{html_escape(title)}</a></h3>")
             html.append(f"<p>{html_escape(grade or 'Raw')} · {html_escape(currency)} {total:.2f} (benchmark {currency} {benchmark:.2f})</p>")
+            html.append(f"<p>Listed: {html_escape(row[15])}</p>")
             if image_url:
                 try:
                     response = requests.get(image_url, timeout=20)
@@ -470,7 +486,7 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
         sheet = wb.create_sheet(name)
         sheet.append(HEADERS)
         for row in rows:
-            sheet.append(row)
+            sheet.append(row[:len(HEADERS)])
         sheet.freeze_panes = "A2"
         sheet.auto_filter.ref = sheet.dimensions
         for cell in sheet[1]:
