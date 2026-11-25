@@ -3,7 +3,7 @@ name: Daily Pokemon eBay scan
 on:
   schedule:
     # 13:22 UTC = 6:22 AM MST (7:22 AM during daylight saving time)
-    - cron: "56 15 * * *"
+    - cron: "22 13 * * *"
   workflow_dispatch:
 
 permissions:
