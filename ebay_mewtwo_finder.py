@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -27,6 +28,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent
 API_ROOT = "https://api.ebay.com"
+MOUNTAIN = ZoneInfo("America/Denver")  # listing dates are shown in Mountain Time (handles MST/MDT)
 
 
 def get_access_token(client_id: str, client_secret: str, api_root: str) -> str:
@@ -252,7 +254,7 @@ def enrich_item_details(items: list[dict[str, Any]], token: str, marketplace: st
                 # full item response's image set for email and workbook output.
                 if item.get("image"):
                     item["_summary_image"] = item["image"]
-                for key in ("condition", "conditionId", "price", "shippingOptions", "image", "additionalImages"):
+                for key in ("condition", "conditionId", "price", "shippingOptions", "image", "additionalImages", "itemCreationDate"):
                     if details.get(key):
                         item[key] = details[key]
     return fetched, failed
@@ -325,6 +327,7 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
             benchmark["as_of"] if benchmark else "",
             round(total - float(benchmark["price"]), 2) if total is not None and benchmark else "",
             item.get("_effective_condition") or item.get("condition", ""),
+            listing_created(item) or "",
             item.get("itemWebUrl", ""),
             issue,
             listing_image_url(item),
@@ -337,6 +340,26 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
         else:
             tabs["Regular"].append(row)
     return tabs
+
+
+def listing_created(item: dict[str, Any]) -> datetime | None:
+    """Return eBay's listing creation time as a naive Mountain Time datetime.
+
+    eBay reports ``itemCreationDate`` as a UTC timestamp such as
+    ``2026-11-22T18:04:11.000Z``. It is converted to America/Denver (daylight
+    saving handled automatically) and returned naive because Excel cannot store
+    timezone-aware values. Missing or unparseable values give None.
+    """
+    raw = item.get("itemCreationDate")
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(MOUNTAIN).replace(tzinfo=None)
 
 
 def listing_image_url(item: dict[str, Any]) -> str:
@@ -354,7 +377,12 @@ def listing_image_url(item: dict[str, Any]) -> str:
     return ""
 
 
-HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
+HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "Listed (MT)", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
+# Look columns up by name so adding a column never silently breaks the email or workbook formatting.
+LISTED_COL = HEADERS.index("Listed (MT)")
+URL_COL = HEADERS.index("eBay URL")
+NOTE_COL = HEADERS.index("Review Note")
+IMAGE_COL = HEADERS.index("Image URL")
 
 
 def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) -> None:
@@ -382,11 +410,13 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) ->
         inline_image_budget = 16 * 1024 * 1024
         for index, row in enumerate(rows):
             title, _, grade, total, currency, _, benchmark, *_ = row
-            url = row[11]
-            image_url = row[13]
+            url = row[URL_COL]
+            image_url = row[IMAGE_COL]
+            listed = row[LISTED_COL]
+            listed_text = f" · Listed {listed:%Y-%m-%d %H:%M} MT" if isinstance(listed, datetime) else ""
             html.append("<hr>")
             html.append(f"<h3><a href=\"{html_escape(url)}\">{html_escape(title)}</a></h3>")
-            html.append(f"<p>{html_escape(grade or 'Raw')} · {html_escape(currency)} {total:.2f} (benchmark {currency} {benchmark:.2f})</p>")
+            html.append(f"<p>{html_escape(grade or 'Raw')} · {html_escape(currency)} {total:.2f} (benchmark {currency} {benchmark:.2f}){html_escape(listed_text)}</p>")
             if image_url:
                 try:
                     response = requests.get(image_url, timeout=20)
@@ -477,15 +507,17 @@ def write_workbook(tabs: dict[str, list[list[Any]]], output: Path, query: str,
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="1F4E78")
             cell.alignment = Alignment(wrap_text=True)
-        widths = [55, 14, 12, 14, 12, 12, 14, 32, 16, 14, 22, 48, 48, 48, 16]
+        widths = [55, 14, 12, 14, 12, 12, 14, 32, 16, 14, 22, 18, 48, 48, 48, 16]
         for index, width in enumerate(widths, start=1):
             sheet.column_dimensions[get_column_letter(index)].width = width
         for row in sheet.iter_rows(min_row=2):
-            row[11].hyperlink = row[11].value if row[11].value else None
-            if row[11].hyperlink:
-                row[11].style = "Hyperlink"
+            row[URL_COL].hyperlink = row[URL_COL].value if row[URL_COL].value else None
+            if row[URL_COL].hyperlink:
+                row[URL_COL].style = "Hyperlink"
+            if isinstance(row[LISTED_COL].value, datetime):
+                row[LISTED_COL].number_format = "yyyy-mm-dd hh:mm"
             row[0].alignment = Alignment(wrap_text=True, vertical="top")
-            row[12].alignment = Alignment(wrap_text=True, vertical="top")
+            row[NOTE_COL].alignment = Alignment(wrap_text=True, vertical="top")
     output.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output)
 
