@@ -40,11 +40,11 @@ For calculated shipping, set `EBAY_ZIP_CODE` in `.env` or pass `--zip`; the scri
 
 5. Fill in `benchmarks.csv` before running if you want listings sorted into the two price tabs. Blank/missing benchmark rows are sent to **Needs Review**.
 
-The workbook is saved as `pokemon_ebay_listings.xlsx` in this project folder. Each card-type pool is capped at 200 text results. Change the text search phrase with `--query` or lower the per-pool cap with `--limit` (1-200).
+The workbook is saved as `pokemon_ebay_listings.xlsx` in this project folder. Each card-type pool is capped at 200 text results. Change the text search phrase with `--query` or lower the per-pool cap with `--limit` (1-200). Each listing tab has a **Listed (UTC)** column showing when the listing was created on eBay (from the Browse API's `itemCreationDate`); it is left blank if eBay does not return a date.
 
 ## Daily underpriced listing email
 
-The scan can send an HTML email containing only listings in the workbook's **Under Market** tab. Each entry includes its eBay link and an embedded listing photo when eBay provides an image URL. The daily scheduled run searches up to 200 graded and 200 raw listings, then sends the results after the workbook is saved. It sends a short no-results message when none qualify; **Regular** and **Needs Review** rows are never emailed.
+The scan can send an HTML email containing only listings in the workbook's **Under Market** tab. Each entry includes its eBay link, the date and time it was listed (UTC), and an embedded listing photo when eBay provides an image URL. The daily scheduled run searches up to 200 graded and 200 raw listings, then sends the results after the workbook is saved. It sends a short no-results message when none qualify; **Regular** and **Needs Review** rows are never emailed.
 
 1. Add SMTP settings and the destination address to `.env` using `.env.example` as a guide. `SMTP_HOST`, `SMTP_FROM`, and `EMAIL_TO` are required. Add username/password if your provider requires SMTP authentication. Keep `.env` private.
 2. Run a one-time manual send with `./.venv/bin/python ebay_mewtwo_finder.py --limit 200 --send-email`. This sends a real email; use a test recipient first if you are validating the setup.
