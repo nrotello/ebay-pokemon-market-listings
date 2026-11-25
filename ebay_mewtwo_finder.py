@@ -17,6 +17,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -27,6 +28,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent
 API_ROOT = "https://api.ebay.com"
+MOUNTAIN = ZoneInfo("America/Denver")  # listing dates are shown in Mountain Time (handles MST/MDT)
 
 
 def get_access_token(client_id: str, client_secret: str, api_root: str) -> str:
@@ -341,11 +343,12 @@ def make_rows(items: list[dict[str, Any]], benchmarks: dict[tuple[str, str], dic
 
 
 def listing_created(item: dict[str, Any]) -> datetime | None:
-    """Return eBay's listing creation time as a naive UTC datetime.
+    """Return eBay's listing creation time as a naive Mountain Time datetime.
 
     eBay reports ``itemCreationDate`` as a UTC timestamp such as
-    ``2026-11-22T18:04:11.000Z``. A naive datetime is returned because Excel
-    cannot store timezone-aware values. Missing or unparseable values give None.
+    ``2026-11-22T18:04:11.000Z``. It is converted to America/Denver (daylight
+    saving handled automatically) and returned naive because Excel cannot store
+    timezone-aware values. Missing or unparseable values give None.
     """
     raw = item.get("itemCreationDate")
     if not raw:
@@ -354,9 +357,9 @@ def listing_created(item: dict[str, Any]) -> datetime | None:
         parsed = datetime.fromisoformat(str(raw).strip().replace("Z", "+00:00"))
     except ValueError:
         return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-    return parsed
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(MOUNTAIN).replace(tzinfo=None)
 
 
 def listing_image_url(item: dict[str, Any]) -> str:
@@ -374,9 +377,9 @@ def listing_image_url(item: dict[str, Any]) -> str:
     return ""
 
 
-HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "Listed (UTC)", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
+HEADERS = ["Title", "Card Type", "Grade", "Total Price", "Currency", "Shipping", "Benchmark", "Benchmark Source", "Benchmark As Of", "Difference", "Condition", "Listed (MT)", "eBay URL", "Review Note", "Image URL", "Minimum Price"]
 # Look columns up by name so adding a column never silently breaks the email or workbook formatting.
-LISTED_COL = HEADERS.index("Listed (UTC)")
+LISTED_COL = HEADERS.index("Listed (MT)")
 URL_COL = HEADERS.index("eBay URL")
 NOTE_COL = HEADERS.index("Review Note")
 IMAGE_COL = HEADERS.index("Image URL")
@@ -410,7 +413,7 @@ def send_underpriced_email(rows: list[list[Any]], recipient: str, query: str) ->
             url = row[URL_COL]
             image_url = row[IMAGE_COL]
             listed = row[LISTED_COL]
-            listed_text = f" · Listed {listed:%Y-%m-%d %H:%M} UTC" if isinstance(listed, datetime) else ""
+            listed_text = f" · Listed {listed:%Y-%m-%d %H:%M} MT" if isinstance(listed, datetime) else ""
             html.append("<hr>")
             html.append(f"<h3><a href=\"{html_escape(url)}\">{html_escape(title)}</a></h3>")
             html.append(f"<p>{html_escape(grade or 'Raw')} · {html_escape(currency)} {total:.2f} (benchmark {currency} {benchmark:.2f}){html_escape(listed_text)}</p>")
